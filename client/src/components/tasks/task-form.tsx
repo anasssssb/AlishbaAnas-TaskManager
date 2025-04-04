@@ -1,12 +1,12 @@
-import { useMutation } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { z } from "zod";
-import { useAuth } from "@/hooks/use-auth";
-import { InsertTask, taskPriority, taskStatus } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { CalendarIcon, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -26,114 +26,132 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
-import {
-  DialogTitle,
-  DialogHeader,
-  DialogFooter,
+import { Calendar } from "@/components/ui/calendar";
+import { 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription 
 } from "@/components/ui/dialog";
+import { 
+  insertTaskSchema, 
+  taskPriority, 
+  InsertTask, 
+  Task 
+} from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+
+// Extend the task schema for the form
+const taskFormSchema = insertTaskSchema.extend({
+  dueDate: z.date().optional(),
+});
+
+type TaskFormValues = z.infer<typeof taskFormSchema>;
 
 interface TaskFormProps {
-  task?: {
-    id: number;
-    title: string;
-    description?: string;
-    priority: string;
-    status: string;
-    dueDate?: Date;
-    estimatedHours?: number;
-  };
+  task?: Task;
   onClose: () => void;
 }
 
 export default function TaskForm({ task, onClose }: TaskFormProps) {
   const { toast } = useToast();
   const { user } = useAuth();
-  
-  const isEditMode = !!task;
-  
-  // Create form schema with validation
-  const taskSchema = z.object({
-    title: z.string().min(3, "Title must be at least 3 characters"),
-    description: z.string().optional(),
-    priority: z.enum(taskPriority),
-    status: z.enum(taskStatus),
-    dueDate: z.date().optional(),
-    estimatedHours: z.coerce.number().min(0).optional(),
-  });
-  
-  // Create form
-  const form = useForm<z.infer<typeof taskSchema>>({
-    resolver: zodResolver(taskSchema),
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
+    task?.dueDate ? new Date(task.dueDate) : undefined
+  );
+
+  // Form initialization
+  const form = useForm<TaskFormValues>({
+    resolver: zodResolver(taskFormSchema),
     defaultValues: {
       title: task?.title || "",
       description: task?.description || "",
-      priority: (task?.priority as any) || "medium",
-      status: (task?.status as any) || "todo",
-      dueDate: task?.dueDate,
-      estimatedHours: task?.estimatedHours,
+      status: task?.status || "todo",
+      priority: task?.priority || "medium",
+      estimatedHours: task?.estimatedHours || undefined,
+      dueDate: task?.dueDate ? new Date(task.dueDate) : undefined,
     },
   });
-  
-  // Create or update task mutation
+
+  // Fetch users for assignee dropdown
+  const { data: users = [] } = useQuery({
+    queryKey: ["/api/users"],
+    // This will be skipped if not authenticated
+    enabled: !!user,
+  });
+
+  // Create or update task
   const taskMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof taskSchema>) => {
-      if (isEditMode) {
+    mutationFn: async (data: InsertTask) => {
+      if (task) {
         // Update existing task
-        const res = await apiRequest("PUT", `/api/tasks/${task.id}`, data);
+        const res = await apiRequest(
+          "PUT", 
+          `/api/tasks/${task.id}`, 
+          data
+        );
         return await res.json();
       } else {
         // Create new task
-        const newTask: InsertTask = {
-          ...data,
-          createdById: user!.id,
-        };
-        
-        const res = await apiRequest("POST", "/api/tasks", newTask);
+        const res = await apiRequest(
+          "POST", 
+          "/api/tasks", 
+          data
+        );
         return await res.json();
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       toast({
-        title: isEditMode ? "Task updated" : "Task created",
-        description: isEditMode 
+        title: task ? "Task updated" : "Task created",
+        description: task 
           ? "The task has been updated successfully" 
           : "New task has been created successfully",
       });
       onClose();
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
-        title: isEditMode ? "Failed to update task" : "Failed to create task",
+        title: "Error",
         description: error.message,
         variant: "destructive",
       });
     },
   });
-  
-  // Handle form submission
-  const onSubmit = (data: z.infer<typeof taskSchema>) => {
-    taskMutation.mutate(data);
+
+  const onSubmit = (data: TaskFormValues) => {
+    if (!user) return;
+
+    // Convert dueDate to ISO string if it exists
+    const dueDate = data.dueDate ? new Date(data.dueDate) : undefined;
+    
+    const formattedData: InsertTask = {
+      ...data,
+      dueDate: dueDate,
+      createdById: user.id,
+    };
+
+    taskMutation.mutate(formattedData);
   };
-  
+
   return (
     <>
       <DialogHeader>
-        <DialogTitle>
-          {isEditMode ? "Edit Task" : "Create New Task"}
-        </DialogTitle>
+        <DialogTitle>{task ? "Edit Task" : "Create New Task"}</DialogTitle>
+        <DialogDescription>
+          {task
+            ? "Update the details of the existing task"
+            : "Fill in the details to create a new task"}
+        </DialogDescription>
       </DialogHeader>
-      
+
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 mt-4">
           <FormField
             control={form.control}
             name="title"
@@ -147,7 +165,7 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
               </FormItem>
             )}
           />
-          
+
           <FormField
             control={form.control}
             name="description"
@@ -155,45 +173,22 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
               <FormItem>
                 <FormLabel>Description</FormLabel>
                 <FormControl>
-                  <Textarea 
-                    placeholder="Add a detailed description..." 
-                    className="min-h-24 resize-none"
-                    {...field}
+                  <Textarea
+                    placeholder="Task description"
+                    rows={3}
                     value={field.value || ""}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
                   />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-          
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="priority"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Priority</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select priority" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
               name="status"
@@ -206,7 +201,7 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select status" />
+                        <SelectValue placeholder="Select a status" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -219,9 +214,37 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
                 </FormItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name="priority"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Priority</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a priority" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {taskPriority.map((priority) => (
+                        <SelectItem key={priority} value={priority}>
+                          {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
-          
-          <div className="grid grid-cols-2 gap-4">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
               name="dueDate"
@@ -233,17 +256,16 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
                       <FormControl>
                         <Button
                           variant={"outline"}
-                          className={cn(
-                            "pl-3 text-left font-normal",
+                          className={`w-full justify-start text-left font-normal ${
                             !field.value && "text-muted-foreground"
-                          )}
+                          }`}
                         >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
                           {field.value ? (
                             format(field.value, "PPP")
                           ) : (
                             <span>Pick a date</span>
                           )}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
@@ -251,21 +273,19 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
                       <Calendar
                         mode="single"
                         selected={field.value}
-                        onSelect={field.onChange}
+                        onSelect={(date) => {
+                          field.onChange(date);
+                          setSelectedDate(date);
+                        }}
                         initialFocus
                       />
                     </PopoverContent>
                   </Popover>
                   <FormMessage />
-                  {!field.value && (
-                    <FormDescription>
-                      Optional: Set a due date for this task
-                    </FormDescription>
-                  )}
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={form.control}
               name="estimatedHours"
@@ -273,46 +293,54 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
                 <FormItem>
                   <FormLabel>Estimated Hours</FormLabel>
                   <FormControl>
-                    <Input 
-                      type="number" 
+                    <Input
+                      type="number"
+                      placeholder="0"
                       min="0"
-                      placeholder="Estimated hours"
-                      {...field}
-                      value={field.value === undefined ? "" : field.value}
+                      value={field.value?.toString() || ""}
+                      onChange={(e) => {
+                        const value = e.target.value === "" ? undefined : parseInt(e.target.value);
+                        field.onChange(isNaN(value as number) ? undefined : value);
+                      }}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
                     />
                   </FormControl>
-                  <FormMessage />
                   <FormDescription>
-                    Optional: Estimate how long this task will take
+                    How many hours this task might take
                   </FormDescription>
+                  <FormMessage />
                 </FormItem>
               )}
             />
           </div>
-          
-          <DialogFooter>
-            <Button 
-              type="button" 
-              variant="outline" 
+
+          <div className="flex justify-end space-x-3 pt-2">
+            <Button
+              type="button"
+              variant="outline"
               onClick={onClose}
               disabled={taskMutation.isPending}
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               type="submit"
               disabled={taskMutation.isPending}
             >
               {taskMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isEditMode ? "Updating..." : "Creating..."}
+                  Saving...
                 </>
+              ) : task ? (
+                "Update Task"
               ) : (
-                isEditMode ? "Update Task" : "Create Task"
+                "Create Task"
               )}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </Form>
     </>
