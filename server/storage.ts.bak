@@ -108,34 +108,25 @@ export class DatabaseStorage implements IStorage {
       mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/task_manager',
       ttl: 14 * 24 * 60 * 60, // 14 days
       autoRemove: 'native',
-      touchAfter: 24 * 3600, // 24 hours
     });
   }
   
   async initialize(): Promise<void> {
     // Connect to MongoDB
-    const connection = await connectToDatabase();
-    if (!connection) {
-      throw new Error("MongoDB connection failed");
-    }
+    await connectToDatabase();
     
-    try {
-      // Check if we need to create a default admin user
-      const adminUser = await this.getUserByUsername("admin");
-      if (!adminUser) {
-        log("Creating default admin user...", "mongodb");
-        await this.createUser({
-          username: "admin",
-          password: "admin123", // This will be hashed in the auth layer
-          email: "admin@taskflow.com",
-          fullName: "Admin User",
-          role: "admin",
-          avatar: "",
-        });
-      }
-    } catch (error) {
-      log(`Error during database initialization: ${error}`, "mongodb");
-      throw new Error(`Failed to initialize database storage: ${error}`);
+    // Check if we need to create a default admin user
+    const adminUser = await this.getUserByUsername("admin");
+    if (!adminUser) {
+      log("Creating default admin user...", "mongodb");
+      await this.createUser({
+        username: "admin",
+        password: "admin123", // This will be hashed in the auth layer
+        email: "admin@taskflow.com",
+        fullName: "Admin User",
+        role: "admin",
+        avatar: "",
+      });
     }
   }
   
@@ -185,8 +176,8 @@ export class DatabaseStorage implements IStorage {
     const task: Task = {
       id,
       title: insertTask.title,
-      status: insertTask.status as "todo" | "inProgress" | "completed",
-      priority: insertTask.priority as "low" | "medium" | "high",
+      status: insertTask.status as TaskStatus,
+      priority: insertTask.priority as TaskPriority,
       createdAt: now,
       createdById: insertTask.createdById,
       description: insertTask.description ?? null,
@@ -273,9 +264,9 @@ export class DatabaseStorage implements IStorage {
     const timeEntry: TimeEntry = { 
       ...insertTimeEntry, 
       id,
-      endTime: insertTimeEntry.endTime ?? null,
-      duration: insertTimeEntry.duration ?? null,
-      notes: insertTimeEntry.notes ?? null
+      endTime: insertTimeEntry.endTime || null,
+      duration: insertTimeEntry.duration || null,
+      notes: insertTimeEntry.notes || null
     };
     await TimeEntryModel.create(timeEntry);
     return timeEntry;
@@ -296,7 +287,7 @@ export class DatabaseStorage implements IStorage {
       id, 
       createdAt: now,
       isRead: false,
-      relatedId: insertNotification.relatedId ?? null
+      relatedId: insertNotification.relatedId || null
     };
     await NotificationModel.create(notification);
     return notification;
@@ -322,27 +313,17 @@ export class StorageFactory {
       try {
         const conn = await connectToDatabase();
         if (conn) {
-          const dbStorage = new DatabaseStorage();
-          try {
-            await dbStorage.initialize();
-            this.instance = dbStorage;
-            log("Using MongoDB for storage", "storage");
-          } catch (initError) {
-            log(`Error initializing MongoDB storage: ${initError}, using in-memory storage`, "storage");
-            const memStorage = new MemStorage();
-            await memStorage.initialize();
-            this.instance = memStorage;
-          }
+          this.instance = new DatabaseStorage();
+          log("Using MongoDB for storage", "storage");
         } else {
           this.instance = new MemStorage();
-          await this.instance.initialize();
           log("Using in-memory storage as fallback", "storage");
         }
       } catch (error) {
         log(`Error initializing storage: ${error}, using in-memory storage`, "storage");
         this.instance = new MemStorage();
-        await this.instance.initialize();
       }
+      await this.instance.initialize();
     }
     return this.instance;
   }
@@ -455,8 +436,8 @@ export class MemStorage implements IStorage {
     const task: Task = {
       id,
       title: insertTask.title,
-      status: insertTask.status as "todo" | "inProgress" | "completed",
-      priority: insertTask.priority as "low" | "medium" | "high",
+      status: insertTask.status as TaskStatus,
+      priority: insertTask.priority as TaskPriority,
       createdAt: now,
       createdById: insertTask.createdById,
       description: insertTask.description ?? null,
@@ -547,9 +528,9 @@ export class MemStorage implements IStorage {
     const timeEntry: TimeEntry = { 
       ...insertTimeEntry, 
       id,
-      endTime: insertTimeEntry.endTime ?? null,
-      duration: insertTimeEntry.duration ?? null,
-      notes: insertTimeEntry.notes ?? null
+      endTime: insertTimeEntry.endTime || null,
+      duration: insertTimeEntry.duration || null,
+      notes: insertTimeEntry.notes || null
     };
     this.timeEntries.set(id, timeEntry);
     return timeEntry;
@@ -570,7 +551,7 @@ export class MemStorage implements IStorage {
       id, 
       createdAt: now,
       isRead: false,
-      relatedId: insertNotification.relatedId ?? null
+      relatedId: insertNotification.relatedId || null
     };
     this.notifications.set(id, notification);
     return notification;
@@ -587,17 +568,9 @@ export class MemStorage implements IStorage {
 }
 
 // Export a placeholder storage object that will be initialized correctly
-// Use MemStorage as a temporary placeholder during initialization
-export let storage: IStorage = new MemStorage();
+export let storage: IStorage;
 
 // Initialize the storage when this module is loaded
 (async () => {
-  try {
-    storage = await StorageFactory.getStorage();
-  } catch (error) {
-    log(`Failed to initialize storage: ${error}, using default in-memory storage`, "storage");
-    // storage is already set to MemStorage
-  }
-})().catch(error => {
-  log(`Unhandled error in storage initialization: ${error}`, "storage");
-});
+  storage = await StorageFactory.getStorage();
+})();
