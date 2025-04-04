@@ -10,6 +10,8 @@ import ReportsPage from "@/pages/reports-page";
 import SettingsPage from "@/pages/settings-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
+import { WebSocketProvider } from "./hooks/use-websocket";
+import { TaskProvider } from "./context/task-context";
 
 function Router() {
   return (
@@ -29,8 +31,12 @@ function Router() {
 function App() {
   return (
     <AuthProvider>
-      <Router />
-      <Toaster />
+      <WebSocketProvider>
+        <TaskProvider>
+          <Router />
+          <Toaster />
+        </TaskProvider>
+      </WebSocketProvider>
     </AuthProvider>
   );
 }
