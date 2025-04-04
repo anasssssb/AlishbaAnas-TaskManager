@@ -37,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: (user: SelectUser) => {
+      console.log("Login successful, user data:", user);
       queryClient.setQueryData(["/api/user"], user);
       toast({
         title: "Welcome back!",
