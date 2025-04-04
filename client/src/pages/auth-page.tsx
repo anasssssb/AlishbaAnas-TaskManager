@@ -3,8 +3,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertUserSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
-import { useState } from "react";
-import { Redirect } from "wouter";
+import { useState, useEffect } from "react";
+import { Redirect, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,7 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [activeTab, setActiveTab] = useState<string>("login");
+  const [, setLocation] = useLocation();
   
   // Login form
   const loginForm = useForm<LoginFormValues>({
@@ -59,20 +60,30 @@ export default function AuthPage() {
     }
   });
   
+  // Effect to handle redirection after login/registration
+  useEffect(() => {
+    if (user) {
+      console.log("User is authenticated, redirecting to homepage", user);
+      // Use the setLocation hook to navigate programmatically
+      setLocation("/");
+    }
+  }, [user, setLocation]);
+  
   // Submit handlers
   const onLoginSubmit = (data: LoginFormValues) => {
+    console.log("Login form submitted", data);
     loginMutation.mutate(data);
   };
   
   const onRegisterSubmit = (data: RegisterFormValues) => {
+    console.log("Register form submitted", data);
     const { confirmPassword, ...registerData } = data;
     registerMutation.mutate(registerData);
   };
   
-  // Redirect if user is already logged in
-  if (user) {
-    console.log("User is authenticated, redirecting to homepage", user);
-    return <Redirect to="/" />;
+  // Show a loading indicator during authentication
+  if (loginMutation.isPending || registerMutation.isPending) {
+    console.log("Login/Register mutation is pending");
   }
   
   return (

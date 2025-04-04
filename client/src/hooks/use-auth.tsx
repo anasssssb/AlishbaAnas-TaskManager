@@ -33,12 +33,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
+      console.log("Login attempt:", credentials.username);
       const res = await apiRequest("POST", "/api/login", credentials);
-      return await res.json();
+      const userData = await res.json();
+      console.log("Login API response:", userData);
+      return userData;
     },
     onSuccess: (user: SelectUser) => {
       console.log("Login successful, user data:", user);
+      // This will trigger the useEffect in auth-page.tsx
       queryClient.setQueryData(["/api/user"], user);
+      
+      // Force a refetch of the user data to ensure it's updated
+      queryClient.invalidateQueries({queryKey: ["/api/user"]});
+      
       toast({
         title: "Welcome back!",
         description: `Logged in as ${user.username}`,
@@ -55,11 +63,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const registerMutation = useMutation({
     mutationFn: async (credentials: InsertUser) => {
+      console.log("Register attempt:", credentials.username);
       const res = await apiRequest("POST", "/api/register", credentials);
-      return await res.json();
+      const userData = await res.json();
+      console.log("Register API response:", userData);
+      return userData;
     },
     onSuccess: (user: SelectUser) => {
+      console.log("Registration successful, user data:", user);
+      // This will trigger the useEffect in auth-page.tsx
       queryClient.setQueryData(["/api/user"], user);
+      
+      // Force a refetch of the user data to ensure it's updated
+      queryClient.invalidateQueries({queryKey: ["/api/user"]});
+      
       toast({
         title: "Registration successful",
         description: "Your account has been created",
