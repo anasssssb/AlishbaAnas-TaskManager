@@ -178,7 +178,7 @@ export default function TaskBoard() {
           <div className="space-y-4">
             <h2 className="text-lg font-semibold">To Do</h2>
             <Droppable droppableId="todo">
-              {(provided) => (
+              {(provided: any) => (
                 <div
                   {...provided.droppableProps}
                   ref={provided.innerRef}
@@ -233,7 +233,7 @@ export default function TaskBoard() {
           <div className="space-y-4">
             <h2 className="text-lg font-semibold">In Progress</h2>
             <Droppable droppableId="inProgress">
-              {(provided) => (
+              {(provided: any) => (
                 <div
                   {...provided.droppableProps}
                   ref={provided.innerRef}
@@ -288,7 +288,7 @@ export default function TaskBoard() {
           <div className="space-y-4">
             <h2 className="text-lg font-semibold">Completed</h2>
             <Droppable droppableId="completed">
-              {(provided) => (
+              {(provided: any) => (
                 <div
                   {...provided.droppableProps}
                   ref={provided.innerRef}
@@ -319,11 +319,9 @@ export default function TaskBoard() {
                                   {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
                                 </Badge>
                               </div>
-                              {task.dueDate && (
-                                <CardDescription className="text-xs">
-                                  Completed: {new Date(task.completedAt || task.updatedAt || "").toLocaleDateString()}
-                                </CardDescription>
-                              )}
+                              <CardDescription className="text-xs">
+                                Completed: {new Date(task.createdAt).toLocaleDateString()}
+                              </CardDescription>
                             </CardHeader>
                             <CardContent className="p-4 pt-2">
                               <p className="text-sm line-clamp-2 opacity-80">

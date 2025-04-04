@@ -36,6 +36,9 @@ export function setupAuth(app: Express) {
     store: storage.sessionStore,
     cookie: {
       maxAge: 1000 * 60 * 60 * 24, // 1 day
+      httpOnly: true,
+      path: "/",
+      sameSite: "lax"
     }
   };
 
@@ -82,8 +85,28 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
+  app.post("/api/login", (req, res, next) => {
+    console.log('Login attempt:', { username: req.body.username });
+    
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) return next(err);
+      
+      if (!user) {
+        console.log('Login failed:', { reason: info?.message || 'Invalid credentials' });
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+      
+      req.login(user, (loginErr) => {
+        if (loginErr) return next(loginErr);
+        
+        console.log('Login successful:', { 
+          userId: user.id, 
+          sessionID: req.sessionID 
+        });
+        
+        return res.status(200).json(user);
+      });
+    })(req, res, next);
   });
 
   app.post("/api/logout", (req, res, next) => {
@@ -94,6 +117,13 @@ export function setupAuth(app: Express) {
   });
 
   app.get("/api/user", (req, res) => {
+    console.log('Auth check:', {
+      isAuthenticated: req.isAuthenticated(),
+      session: req.session,
+      user: req.user,
+      sessionID: req.sessionID
+    });
+    
     if (!req.isAuthenticated()) return res.sendStatus(401);
     res.json(req.user);
   });
