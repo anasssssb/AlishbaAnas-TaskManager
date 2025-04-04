@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+import { DragDropContext, Droppable, Draggable, DraggableProvided, DroppableProvided, DropResult, ResponderProvided } from "react-beautiful-dnd";
 import { PlusCircle, Loader2 } from "lucide-react";
 import { Task } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
@@ -80,7 +80,7 @@ export default function TaskBoard() {
   };
 
   // Handle drag and drop
-  const handleDragEnd = async (result: any) => {
+  const handleDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
 
     const { source, destination, draggableId } = result;
@@ -178,7 +178,7 @@ export default function TaskBoard() {
           <div className="space-y-4">
             <h2 className="text-lg font-semibold">To Do</h2>
             <Droppable droppableId="todo">
-              {(provided: any) => (
+              {(provided: DroppableProvided) => (
                 <div
                   {...provided.droppableProps}
                   ref={provided.innerRef}
@@ -190,7 +190,7 @@ export default function TaskBoard() {
                       draggableId={`task-${task.id}`}
                       index={index}
                     >
-                      {(provided) => (
+                      {(provided: DraggableProvided) => (
                         <div
                           ref={provided.innerRef}
                           {...provided.draggableProps}
@@ -233,7 +233,7 @@ export default function TaskBoard() {
           <div className="space-y-4">
             <h2 className="text-lg font-semibold">In Progress</h2>
             <Droppable droppableId="inProgress">
-              {(provided: any) => (
+              {(provided: DroppableProvided) => (
                 <div
                   {...provided.droppableProps}
                   ref={provided.innerRef}
@@ -245,7 +245,7 @@ export default function TaskBoard() {
                       draggableId={`task-${task.id}`}
                       index={index}
                     >
-                      {(provided) => (
+                      {(provided: DraggableProvided) => (
                         <div
                           ref={provided.innerRef}
                           {...provided.draggableProps}
@@ -288,7 +288,7 @@ export default function TaskBoard() {
           <div className="space-y-4">
             <h2 className="text-lg font-semibold">Completed</h2>
             <Droppable droppableId="completed">
-              {(provided: any) => (
+              {(provided: DroppableProvided) => (
                 <div
                   {...provided.droppableProps}
                   ref={provided.innerRef}
@@ -300,7 +300,7 @@ export default function TaskBoard() {
                       draggableId={`task-${task.id}`}
                       index={index}
                     >
-                      {(provided) => (
+                      {(provided: DraggableProvided) => (
                         <div
                           ref={provided.innerRef}
                           {...provided.draggableProps}

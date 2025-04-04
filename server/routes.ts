@@ -17,7 +17,7 @@ const wsClients: WebSocketClient[] = [];
 
 // WebSocket message types
 export type WebSocketMessage = {
-  type: 'task_update' | 'comment_added' | 'notification' | 'task_assigned';
+  type: 'task_update' | 'comment_added' | 'notification' | 'task_assigned' | 'time_entry_added';
   payload: any;
 };
 
@@ -217,6 +217,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Time entries
+  app.get("/api/timeEntries", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    // In a real app, you might want to filter by user or date range
+    const timeEntries = await storage.getTimeEntriesByUserId(req.user!.id);
+    res.json(timeEntries);
+  });
+
+  app.get("/api/tasks/:id/time", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const taskId = parseInt(req.params.id);
+    const timeEntries = await storage.getTimeEntriesByTaskId(taskId);
+    res.json(timeEntries);
+  });
+  
   app.post("/api/tasks/:id/time", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const taskId = parseInt(req.params.id);
@@ -227,6 +241,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       taskId,
       userId,
     });
+    
+    // Get task and assignees for notifications
+    const task = await storage.getTask(taskId);
+    const assignees = await storage.getTaskAssignees(taskId);
+    
+    if (task) {
+      // Broadcast time entry creation via WebSocket
+      broadcastMessage({
+        type: 'time_entry_added',
+        payload: { 
+          taskId,
+          userId,
+          timeEntry,
+          task
+        }
+      });
+      
+      // Notify task assignees and creator (if different from current user)
+      const notifyUsers = [...assignees.map(a => a.userId)];
+      if (task.createdById !== userId && !notifyUsers.includes(task.createdById)) {
+        notifyUsers.push(task.createdById);
+      }
+      
+      // Create and send notifications
+      for (const notifyUserId of notifyUsers) {
+        if (notifyUserId !== userId) { // Don't notify the time entry creator
+          const notification = await storage.createNotification({
+            userId: notifyUserId,
+            type: 'time_tracked',
+            title: 'Time Entry Added',
+            message: `New time entry logged for task: ${task.title}`,
+            relatedId: taskId
+          });
+          
+          // Send real-time notification
+          sendMessageToUser(notifyUserId, {
+            type: 'notification',
+            payload: notification
+          });
+        }
+      }
+    }
+    
     res.status(201).json(timeEntry);
   });
 

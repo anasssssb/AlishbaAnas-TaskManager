@@ -66,6 +66,7 @@ export interface IStorage {
   
   // Time Entries
   getTimeEntriesByTaskId(taskId: number): Promise<TimeEntry[]>;
+  getTimeEntriesByUserId(userId: number): Promise<TimeEntry[]>;
   createTimeEntry(timeEntry: InsertTimeEntry): Promise<TimeEntry>;
   
   // Notifications
@@ -264,6 +265,12 @@ export class DatabaseStorage implements IStorage {
   async getTimeEntriesByTaskId(taskId: number): Promise<TimeEntry[]> {
     return await TimeEntryModel.find({ taskId })
       .sort({ startTime: 1 }) // Ascending order by start time
+      .lean();
+  }
+  
+  async getTimeEntriesByUserId(userId: number): Promise<TimeEntry[]> {
+    return await TimeEntryModel.find({ userId })
+      .sort({ startTime: -1 }) // Descending order by start time (newest first)
       .lean();
   }
   
@@ -539,6 +546,12 @@ export class MemStorage implements IStorage {
     return Array.from(this.timeEntries.values())
       .filter((entry) => entry.taskId === taskId)
       .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+  }
+  
+  async getTimeEntriesByUserId(userId: number): Promise<TimeEntry[]> {
+    return Array.from(this.timeEntries.values())
+      .filter((entry) => entry.userId === userId)
+      .sort((a, b) => b.startTime.getTime() - a.startTime.getTime()); // Newest first
   }
   
   async createTimeEntry(insertTimeEntry: InsertTimeEntry): Promise<TimeEntry> {
