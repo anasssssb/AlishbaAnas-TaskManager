@@ -1,10 +1,20 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import * as schema from "@shared/schema";
+import mongoose from 'mongoose';
+import { log } from './vite';
 
-// Create PostgreSQL connection
-const connectionString = process.env.DATABASE_URL!;
-const client = postgres(connectionString);
+// MongoDB connection string - using environment variable if available
+const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/task_manager';
 
-// Initialize drizzle with the client and schema
-export const db = drizzle(client, { schema });
+// Connect to MongoDB
+export async function connectToDatabase() {
+  try {
+    await mongoose.connect(MONGO_URI);
+    log('Connected to MongoDB successfully', 'mongodb');
+    return mongoose.connection;
+  } catch (error) {
+    log(`MongoDB connection error: ${error}`, 'mongodb');
+    process.exit(1);
+  }
+}
+
+// Get the MongoDB connection
+export const getConnection = () => mongoose.connection;

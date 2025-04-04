@@ -14,8 +14,20 @@ import {
   Notification,
   InsertNotification
 } from "@shared/schema";
-import createMemoryStore from "memorystore";
 import session from "express-session";
+import MongoStore from "connect-mongo";
+import mongoose from "mongoose";
+import { connectToDatabase } from "./db";
+import { 
+  UserModel, 
+  TaskModel, 
+  TaskAssigneeModel, 
+  CommentModel, 
+  AttachmentModel, 
+  TimeEntryModel, 
+  NotificationModel 
+} from "./models";
+import { log } from "./vite";
 
 // Modify the interface with any CRUD methods
 // you might need
@@ -56,196 +68,191 @@ export interface IStorage {
   markNotificationAsRead(id: number): Promise<Notification | undefined>;
   
   // Session store
-  sessionStore: session.SessionStore;
+  sessionStore: any;
+  
+  // Initialize the connection
+  initialize(): Promise<void>;
 }
 
-const MemoryStore = createMemoryStore(session);
-
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private tasks: Map<number, Task>;
-  private taskAssignees: Map<number, TaskAssignee>;
-  private comments: Map<number, Comment>;
-  private attachments: Map<number, Attachment>;
-  private timeEntries: Map<number, TimeEntry>;
-  private notifications: Map<number, Notification>;
+// Counter for auto-incrementing IDs
+class Counter {
+  private counters: Map<string, number>;
   
-  // Counters for IDs
-  private userId: number;
-  private taskId: number;
-  private assigneeId: number;
-  private commentId: number;
-  private attachmentId: number;
-  private timeEntryId: number;
-  private notificationId: number;
-  
-  // Session store
-  sessionStore: session.SessionStore;
-
   constructor() {
-    this.users = new Map();
-    this.tasks = new Map();
-    this.taskAssignees = new Map();
-    this.comments = new Map();
-    this.attachments = new Map();
-    this.timeEntries = new Map();
-    this.notifications = new Map();
+    this.counters = new Map();
+  }
+  
+  async getNextId(collection: string): Promise<number> {
+    let currentId = this.counters.get(collection) || 0;
+    currentId++;
+    this.counters.set(collection, currentId);
+    return currentId;
+  }
+}
+
+export class DatabaseStorage implements IStorage {
+  private counter: Counter;
+  sessionStore: any;
+  
+  constructor() {
+    this.counter = new Counter();
     
-    this.userId = 1;
-    this.taskId = 1;
-    this.assigneeId = 1;
-    this.commentId = 1;
-    this.attachmentId = 1;
-    this.timeEntryId = 1;
-    this.notificationId = 1;
-    
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000, // 24 hours
-    });
-    
-    // Create a default admin user
-    this.createUser({
-      username: "admin",
-      password: "admin123", // This will be hashed in the auth layer
-      email: "admin@taskflow.com",
-      fullName: "Admin User",
-      role: "admin",
-      avatar: "",
+    // Create MongoDB session store
+    this.sessionStore = MongoStore.create({
+      mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/task_manager',
+      ttl: 14 * 24 * 60 * 60, // 14 days
+      autoRemove: 'native',
     });
   }
-
+  
+  async initialize(): Promise<void> {
+    // Connect to MongoDB
+    await connectToDatabase();
+    
+    // Check if we need to create a default admin user
+    const adminUser = await this.getUserByUsername("admin");
+    if (!adminUser) {
+      log("Creating default admin user...", "mongodb");
+      await this.createUser({
+        username: "admin",
+        password: "admin123", // This will be hashed in the auth layer
+        email: "admin@taskflow.com",
+        fullName: "Admin User",
+        role: "admin",
+        avatar: "",
+      });
+    }
+  }
+  
   // User methods
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const user = await UserModel.findOne({ id }).lean();
+    return user || undefined;
   }
-
+  
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const user = await UserModel.findOne({ username }).lean();
+    return user || undefined;
   }
-
+  
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userId++;
+    const id = await this.counter.getNextId('users');
     const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    await UserModel.create(user);
     return user;
   }
   
   async getUsers(): Promise<User[]> {
-    return Array.from(this.users.values());
+    return await UserModel.find().lean();
   }
   
   // Task methods
   async getTasks(): Promise<Task[]> {
-    return Array.from(this.tasks.values());
+    return await TaskModel.find().lean();
   }
   
   async getTask(id: number): Promise<Task | undefined> {
-    return this.tasks.get(id);
+    const task = await TaskModel.findOne({ id }).lean();
+    return task || undefined;
   }
   
   async createTask(insertTask: InsertTask): Promise<Task> {
-    const id = this.taskId++;
+    const id = await this.counter.getNextId('tasks');
     const now = new Date();
     const task: Task = { 
       ...insertTask, 
       id, 
       createdAt: now 
     };
-    this.tasks.set(id, task);
+    await TaskModel.create(task);
     return task;
   }
   
   async updateTask(id: number, taskUpdate: Partial<Task>): Promise<Task | undefined> {
-    const task = this.tasks.get(id);
-    if (!task) return undefined;
+    const updatedTask = await TaskModel.findOneAndUpdate(
+      { id }, 
+      { $set: taskUpdate }, 
+      { new: true }
+    ).lean();
     
-    const updatedTask = { ...task, ...taskUpdate };
-    this.tasks.set(id, updatedTask);
-    return updatedTask;
+    return updatedTask || undefined;
   }
   
   async deleteTask(id: number): Promise<boolean> {
-    return this.tasks.delete(id);
+    const result = await TaskModel.deleteOne({ id });
+    return result.deletedCount > 0;
   }
   
   // Task Assignee methods
   async getTaskAssignees(taskId: number): Promise<TaskAssignee[]> {
-    return Array.from(this.taskAssignees.values()).filter(
-      (assignee) => assignee.taskId === taskId
-    );
+    return await TaskAssigneeModel.find({ taskId }).lean();
   }
   
   async assignTaskToUser(taskId: number, userId: number): Promise<TaskAssignee> {
-    const id = this.assigneeId++;
+    const id = await this.counter.getNextId('taskAssignees');
     const assignee: TaskAssignee = { id, taskId, userId };
-    this.taskAssignees.set(id, assignee);
+    await TaskAssigneeModel.create(assignee);
     return assignee;
   }
   
   async removeTaskAssignee(taskId: number, userId: number): Promise<boolean> {
-    const assignee = Array.from(this.taskAssignees.values()).find(
-      (a) => a.taskId === taskId && a.userId === userId
-    );
-    
-    if (!assignee) return false;
-    return this.taskAssignees.delete(assignee.id);
+    const result = await TaskAssigneeModel.deleteOne({ taskId, userId });
+    return result.deletedCount > 0;
   }
   
   // Comment methods
   async getCommentsByTaskId(taskId: number): Promise<Comment[]> {
-    return Array.from(this.comments.values())
-      .filter((comment) => comment.taskId === taskId)
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    return await CommentModel.find({ taskId })
+      .sort({ createdAt: 1 }) // Ascending order by creation time
+      .lean();
   }
   
   async createComment(insertComment: InsertComment): Promise<Comment> {
-    const id = this.commentId++;
+    const id = await this.counter.getNextId('comments');
     const now = new Date();
     const comment: Comment = { ...insertComment, id, createdAt: now };
-    this.comments.set(id, comment);
+    await CommentModel.create(comment);
     return comment;
   }
   
   // Attachment methods
   async getAttachmentsByTaskId(taskId: number): Promise<Attachment[]> {
-    return Array.from(this.attachments.values())
-      .filter((attachment) => attachment.taskId === taskId)
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    return await AttachmentModel.find({ taskId })
+      .sort({ createdAt: 1 }) // Ascending order by creation time
+      .lean();
   }
   
   async createAttachment(insertAttachment: InsertAttachment): Promise<Attachment> {
-    const id = this.attachmentId++;
+    const id = await this.counter.getNextId('attachments');
     const now = new Date();
     const attachment: Attachment = { ...insertAttachment, id, createdAt: now };
-    this.attachments.set(id, attachment);
+    await AttachmentModel.create(attachment);
     return attachment;
   }
   
   // Time Entry methods
   async getTimeEntriesByTaskId(taskId: number): Promise<TimeEntry[]> {
-    return Array.from(this.timeEntries.values())
-      .filter((entry) => entry.taskId === taskId)
-      .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+    return await TimeEntryModel.find({ taskId })
+      .sort({ startTime: 1 }) // Ascending order by start time
+      .lean();
   }
   
   async createTimeEntry(insertTimeEntry: InsertTimeEntry): Promise<TimeEntry> {
-    const id = this.timeEntryId++;
+    const id = await this.counter.getNextId('timeEntries');
     const timeEntry: TimeEntry = { ...insertTimeEntry, id };
-    this.timeEntries.set(id, timeEntry);
+    await TimeEntryModel.create(timeEntry);
     return timeEntry;
   }
   
   // Notification methods
   async getNotificationsByUserId(userId: number): Promise<Notification[]> {
-    return Array.from(this.notifications.values())
-      .filter((notification) => notification.userId === userId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Newest first
+    return await NotificationModel.find({ userId })
+      .sort({ createdAt: -1 }) // Descending order by creation time (newest first)
+      .lean();
   }
   
   async createNotification(insertNotification: InsertNotification): Promise<Notification> {
-    const id = this.notificationId++;
+    const id = await this.counter.getNextId('notifications');
     const now = new Date();
     const notification: Notification = { 
       ...insertNotification, 
@@ -253,18 +260,19 @@ export class MemStorage implements IStorage {
       createdAt: now,
       isRead: false
     };
-    this.notifications.set(id, notification);
+    await NotificationModel.create(notification);
     return notification;
   }
   
   async markNotificationAsRead(id: number): Promise<Notification | undefined> {
-    const notification = this.notifications.get(id);
-    if (!notification) return undefined;
+    const updatedNotification = await NotificationModel.findOneAndUpdate(
+      { id }, 
+      { $set: { isRead: true } }, 
+      { new: true }
+    ).lean();
     
-    const updatedNotification = { ...notification, isRead: true };
-    this.notifications.set(id, updatedNotification);
-    return updatedNotification;
+    return updatedNotification || undefined;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
