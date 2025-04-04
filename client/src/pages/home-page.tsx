@@ -8,7 +8,7 @@ import CalendarWidget from "@/components/dashboard/calendar-widget";
 import { useQuery } from "@tanstack/react-query";
 import { Task } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
-import { ChartLineUp, CheckSquare, Clock, Timer } from "lucide-react";
+import { TrendingUp, CheckSquare, Clock, Timer } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 
@@ -114,7 +114,7 @@ export default function HomePage() {
               <StatsCard
                 title="Productivity Score"
                 value={`${productivityScore}%`}
-                icon={<ChartLineUp className="h-5 w-5" />}
+                icon={<TrendingUp className="h-5 w-5" />}
                 iconBgColor="bg-green-100"
                 iconColor="text-green-500"
                 change={7}
