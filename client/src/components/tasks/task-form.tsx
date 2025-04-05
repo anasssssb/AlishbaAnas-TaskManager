@@ -47,7 +47,12 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 
 // Extend the task schema for the form
 const taskFormSchema = insertTaskSchema.extend({
-  dueDate: z.date().optional(),
+  title: z.string().min(1, "Title is required"),
+  status: z.enum(["todo", "inProgress", "completed"]).default("todo"),
+  priority: z.enum(["low", "medium", "high"]).default("medium"),
+  dueDate: z.date().optional().nullable(),
+  description: z.string().optional().nullable(),
+  estimatedHours: z.number().optional().nullable(),
 });
 
 type TaskFormValues = z.infer<typeof taskFormSchema>;
@@ -75,6 +80,7 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
       estimatedHours: task?.estimatedHours || undefined,
       dueDate: task?.dueDate ? new Date(task.dueDate) : undefined,
     },
+    mode: "onChange",
   });
 
   // Fetch users for assignee dropdown
@@ -127,15 +133,18 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
   const onSubmit = (data: TaskFormValues) => {
     if (!user) return;
 
-    // Convert dueDate to ISO string if it exists
-    const dueDate = data.dueDate ? new Date(data.dueDate) : undefined;
-    
+    // Need to ensure we have the minimum required fields for a task
     const formattedData: InsertTask = {
-      ...data,
-      dueDate: dueDate,
+      title: data.title,
+      description: data.description || null, // Handle undefined
+      status: data.status || "todo",
+      priority: data.priority || "medium",
+      dueDate: data.dueDate ? new Date(data.dueDate) : null,
+      estimatedHours: data.estimatedHours || null,
       createdById: user.id,
     };
 
+    console.log("Submitting task:", formattedData);
     taskMutation.mutate(formattedData);
   };
 
@@ -272,7 +281,7 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
                     <PopoverContent className="w-auto p-0" align="start">
                       <Calendar
                         mode="single"
-                        selected={field.value}
+                        selected={field.value || undefined}
                         onSelect={(date) => {
                           field.onChange(date);
                           setSelectedDate(date);

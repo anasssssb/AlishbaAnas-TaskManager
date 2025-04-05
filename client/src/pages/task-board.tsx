@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { DragDropContext, Droppable, Draggable, DraggableProvided, DroppableProvided, DropResult, ResponderProvided } from "react-beautiful-dnd";
+import { DragDropContext, Droppable, Draggable, DraggableProvided, DroppableProvided, DropResult } from "react-beautiful-dnd";
 import { PlusCircle, Loader2 } from "lucide-react";
 import { Task } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import TaskFilter from "@/components/tasks/task-filter";
 import TaskForm from "@/components/tasks/task-form";
+import Sidebar from "@/components/layout/sidebar";
+import Header from "@/components/layout/header";
 import {
   Dialog,
   DialogContent,
@@ -147,199 +149,211 @@ export default function TaskBoard() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header />
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Task Board</h1>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              New Task
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <TaskForm task={selectedTask} onClose={handleDialogClose} />
-          </DialogContent>
-        </Dialog>
+    <div className="flex h-screen overflow-hidden">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header />
+        <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">Task Board</h1>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  New Task
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px]">
+                <TaskForm task={selectedTask} onClose={handleDialogClose} />
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <TaskFilter filters={filters} setFilters={setFilters} />
+
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* To Do Column */}
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold">To Do</h2>
+                <Droppable droppableId="todo">
+                  {(provided: DroppableProvided) => (
+                    <div
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
+                      className="space-y-3 min-h-[200px]"
+                    >
+                      {groupedTasks.todo.map((task, index) => (
+                        <Draggable
+                          key={`task-${task.id}`}
+                          draggableId={`task-${task.id}`}
+                          index={index}
+                        >
+                          {(provided: DraggableProvided) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              onClick={() => handleTaskClick(task)}
+                            >
+                              <Card className="cursor-pointer hover:border-primary transition-colors">
+                                <CardHeader className="p-4 pb-2">
+                                  <div className="flex justify-between items-start">
+                                    <CardTitle className="text-base">{task.title}</CardTitle>
+                                    <Badge
+                                      className={`${getPriorityColor(task.priority)} text-white`}
+                                    >
+                                      {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+                                    </Badge>
+                                  </div>
+                                  {task.dueDate && (
+                                    <CardDescription className="text-xs">
+                                      Due: {new Date(task.dueDate).toLocaleDateString()}
+                                    </CardDescription>
+                                  )}
+                                </CardHeader>
+                                <CardContent className="p-4 pt-2">
+                                  <p className="text-sm line-clamp-2">
+                                    {task.description || "No description"}
+                                  </p>
+                                </CardContent>
+                              </Card>
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </div>
+
+              {/* In Progress Column */}
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold">In Progress</h2>
+                <Droppable droppableId="inProgress">
+                  {(provided: DroppableProvided) => (
+                    <div
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
+                      className="space-y-3 min-h-[200px]"
+                    >
+                      {groupedTasks.inProgress.map((task, index) => (
+                        <Draggable
+                          key={`task-${task.id}`}
+                          draggableId={`task-${task.id}`}
+                          index={index}
+                        >
+                          {(provided: DraggableProvided) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              onClick={() => handleTaskClick(task)}
+                            >
+                              <Card className="cursor-pointer hover:border-primary transition-colors">
+                                <CardHeader className="p-4 pb-2">
+                                  <div className="flex justify-between items-start">
+                                    <CardTitle className="text-base">{task.title}</CardTitle>
+                                    <Badge
+                                      className={`${getPriorityColor(task.priority)} text-white`}
+                                    >
+                                      {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+                                    </Badge>
+                                  </div>
+                                  {task.dueDate && (
+                                    <CardDescription className="text-xs">
+                                      Due: {new Date(task.dueDate).toLocaleDateString()}
+                                    </CardDescription>
+                                  )}
+                                </CardHeader>
+                                <CardContent className="p-4 pt-2">
+                                  <p className="text-sm line-clamp-2">
+                                    {task.description || "No description"}
+                                  </p>
+                                </CardContent>
+                              </Card>
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </div>
+
+              {/* Completed Column */}
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold">Completed</h2>
+                <Droppable droppableId="completed">
+                  {(provided: DroppableProvided) => (
+                    <div
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
+                      className="space-y-3 min-h-[200px]"
+                    >
+                      {groupedTasks.completed.map((task, index) => (
+                        <Draggable
+                          key={`task-${task.id}`}
+                          draggableId={`task-${task.id}`}
+                          index={index}
+                        >
+                          {(provided: DraggableProvided) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              onClick={() => handleTaskClick(task)}
+                            >
+                              <Card className="cursor-pointer hover:border-primary transition-colors opacity-80">
+                                <CardHeader className="p-4 pb-2">
+                                  <div className="flex justify-between items-start">
+                                    <CardTitle className="text-base line-through">
+                                      {task.title}
+                                    </CardTitle>
+                                    <Badge
+                                      className={`${getPriorityColor(task.priority)} text-white opacity-60`}
+                                    >
+                                      {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+                                    </Badge>
+                                  </div>
+                                  <CardDescription className="text-xs">
+                                    Completed: {new Date(task.createdAt).toLocaleDateString()}
+                                  </CardDescription>
+                                </CardHeader>
+                                <CardContent className="p-4 pt-2">
+                                  <p className="text-sm line-clamp-2 opacity-80">
+                                    {task.description || "No description"}
+                                  </p>
+                                </CardContent>
+                              </Card>
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </div>
+            </div>
+          </DragDropContext>
+        </main>
       </div>
-
-      <TaskFilter filters={filters} setFilters={setFilters} />
-
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* To Do Column */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">To Do</h2>
-            <Droppable droppableId="todo">
-              {(provided: DroppableProvided) => (
-                <div
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                  className="space-y-3 min-h-[200px]"
-                >
-                  {groupedTasks.todo.map((task, index) => (
-                    <Draggable
-                      key={`task-${task.id}`}
-                      draggableId={`task-${task.id}`}
-                      index={index}
-                    >
-                      {(provided: DraggableProvided) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          onClick={() => handleTaskClick(task)}
-                        >
-                          <Card className="cursor-pointer hover:border-primary transition-colors">
-                            <CardHeader className="p-4 pb-2">
-                              <div className="flex justify-between items-start">
-                                <CardTitle className="text-base">{task.title}</CardTitle>
-                                <Badge
-                                  className={`${getPriorityColor(task.priority)} text-white`}
-                                >
-                                  {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-                                </Badge>
-                              </div>
-                              {task.dueDate && (
-                                <CardDescription className="text-xs">
-                                  Due: {new Date(task.dueDate).toLocaleDateString()}
-                                </CardDescription>
-                              )}
-                            </CardHeader>
-                            <CardContent className="p-4 pt-2">
-                              <p className="text-sm line-clamp-2">
-                                {task.description || "No description"}
-                              </p>
-                            </CardContent>
-                          </Card>
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </div>
-
-          {/* In Progress Column */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">In Progress</h2>
-            <Droppable droppableId="inProgress">
-              {(provided: DroppableProvided) => (
-                <div
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                  className="space-y-3 min-h-[200px]"
-                >
-                  {groupedTasks.inProgress.map((task, index) => (
-                    <Draggable
-                      key={`task-${task.id}`}
-                      draggableId={`task-${task.id}`}
-                      index={index}
-                    >
-                      {(provided: DraggableProvided) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          onClick={() => handleTaskClick(task)}
-                        >
-                          <Card className="cursor-pointer hover:border-primary transition-colors">
-                            <CardHeader className="p-4 pb-2">
-                              <div className="flex justify-between items-start">
-                                <CardTitle className="text-base">{task.title}</CardTitle>
-                                <Badge
-                                  className={`${getPriorityColor(task.priority)} text-white`}
-                                >
-                                  {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-                                </Badge>
-                              </div>
-                              {task.dueDate && (
-                                <CardDescription className="text-xs">
-                                  Due: {new Date(task.dueDate).toLocaleDateString()}
-                                </CardDescription>
-                              )}
-                            </CardHeader>
-                            <CardContent className="p-4 pt-2">
-                              <p className="text-sm line-clamp-2">
-                                {task.description || "No description"}
-                              </p>
-                            </CardContent>
-                          </Card>
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </div>
-
-          {/* Completed Column */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">Completed</h2>
-            <Droppable droppableId="completed">
-              {(provided: DroppableProvided) => (
-                <div
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                  className="space-y-3 min-h-[200px]"
-                >
-                  {groupedTasks.completed.map((task, index) => (
-                    <Draggable
-                      key={`task-${task.id}`}
-                      draggableId={`task-${task.id}`}
-                      index={index}
-                    >
-                      {(provided: DraggableProvided) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          onClick={() => handleTaskClick(task)}
-                        >
-                          <Card className="cursor-pointer hover:border-primary transition-colors opacity-80">
-                            <CardHeader className="p-4 pb-2">
-                              <div className="flex justify-between items-start">
-                                <CardTitle className="text-base line-through">
-                                  {task.title}
-                                </CardTitle>
-                                <Badge
-                                  className={`${getPriorityColor(task.priority)} text-white opacity-60`}
-                                >
-                                  {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-                                </Badge>
-                              </div>
-                              <CardDescription className="text-xs">
-                                Completed: {new Date(task.createdAt).toLocaleDateString()}
-                              </CardDescription>
-                            </CardHeader>
-                            <CardContent className="p-4 pt-2">
-                              <p className="text-sm line-clamp-2 opacity-80">
-                                {task.description || "No description"}
-                              </p>
-                            </CardContent>
-                          </Card>
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </div>
-        </div>
-      </DragDropContext>
     </div>
   );
 }
