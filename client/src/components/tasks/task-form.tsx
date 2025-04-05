@@ -139,12 +139,19 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
       description: data.description || null, // Handle undefined
       status: data.status || "todo",
       priority: data.priority || "medium",
-      dueDate: data.dueDate ? new Date(data.dueDate) : null,
+      dueDate: data.dueDate || null,
       estimatedHours: data.estimatedHours || null,
       createdById: user.id,
     };
 
     console.log("Submitting task:", formattedData);
+    
+    // For debugging only - check date type
+    if (formattedData.dueDate) {
+      console.log("Due date object type:", Object.prototype.toString.call(formattedData.dueDate));
+      console.log("Due date string representation:", formattedData.dueDate.toString());
+    }
+    
     taskMutation.mutate(formattedData);
   };
 

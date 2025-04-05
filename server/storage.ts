@@ -200,12 +200,24 @@ export class DatabaseStorage implements IStorage {
   }
   
   async updateTask(id: number, taskUpdate: Partial<Task>): Promise<Task | undefined> {
+    // Log the update
+    console.log("Updating task in storage:", id, JSON.stringify(taskUpdate));
+    
+    // Handle date objects for Mongoose
+    let update = { ...taskUpdate };
+    
+    // Handle any date conversions needed for MongoDB
+    if ('dueDate' in update && update.dueDate !== null && typeof update.dueDate === 'string') {
+      update.dueDate = new Date(update.dueDate);
+    }
+    
     const updatedTask = await TaskModel.findOneAndUpdate(
       { id }, 
-      { $set: taskUpdate }, 
+      { $set: update }, 
       { new: true }
     ).lean();
     
+    console.log("Task after update:", updatedTask);
     return updatedTask || undefined;
   }
   
@@ -476,11 +488,21 @@ export class MemStorage implements IStorage {
   }
   
   async updateTask(id: number, taskUpdate: Partial<Task>): Promise<Task | undefined> {
+    console.log("Updating task in MemStorage:", id, JSON.stringify(taskUpdate));
+    
     const task = this.tasks.get(id);
     if (!task) return undefined;
     
-    const updatedTask = { ...task, ...taskUpdate };
+    // Handle any date conversions needed for consistency with MongoDB implementation
+    let update = { ...taskUpdate };
+    if ('dueDate' in update && update.dueDate !== null && typeof update.dueDate === 'string') {
+      update.dueDate = new Date(update.dueDate);
+    }
+    
+    const updatedTask = { ...task, ...update };
     this.tasks.set(id, updatedTask);
+    
+    console.log("Task after update in MemStorage:", updatedTask);
     return updatedTask;
   }
   

@@ -116,11 +116,15 @@ export default function TaskBoard() {
 
       // Call the API to update the task status
       try {
+        console.log("Updating task status:", taskId, destination.droppableId);
+        
+        // Only send the status change, not the entire task
+        // This avoids date conversion issues
         await apiRequest("PUT", `/api/tasks/${taskId}`, {
-          ...task,
           status: destination.droppableId,
         });
       } catch (error) {
+        console.error("Error updating task status:", error);
         toast({
           title: "Error updating task",
           description: (error as Error).message,
