@@ -5,6 +5,7 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertTaskSchema, insertCommentSchema, Task, insertNotificationSchema } from "@shared/schema";
 import { validateRequest } from "zod-express-middleware";
+import { z } from "zod";
 
 // WebSocket clients map
 type WebSocketClient = {
@@ -67,35 +68,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/tasks", validateRequest({ body: insertTaskSchema }), async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const userId = req.user!.id;
-    const task = await storage.createTask({
-      ...req.body,
-      createdById: userId,
-    });
     
-    // Broadcast to all clients about new task
-    broadcastMessage({
-      type: 'task_update',
-      payload: { action: 'created', task }
-    });
-    
-    res.status(201).json(task);
+    try {
+      console.log("Creating task with data:", req.body);
+      
+      const task = await storage.createTask({
+        ...req.body,
+        createdById: userId,
+      });
+      
+      // Broadcast to all clients about new task
+      broadcastMessage({
+        type: 'task_update',
+        payload: { action: 'created', task }
+      });
+      
+      res.status(201).json(task);
+    } catch (error) {
+      console.error("Error creating task:", error);
+      res.status(500).json({ message: "Failed to create task", error: (error as Error).message });
+    }
   });
 
-  app.put("/api/tasks/:id", async (req, res) => {
+  app.put("/api/tasks/:id", validateRequest({ 
+    body: insertTaskSchema
+      .extend({
+        status: z.enum(["todo", "inProgress", "completed"]).optional(),
+        priority: z.enum(["low", "medium", "high"]).optional(),
+      })
+      .partial() 
+  }), async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const taskId = parseInt(req.params.id);
-    const updatedTask = await storage.updateTask(taskId, req.body);
-    if (!updatedTask) {
-      return res.status(404).json({ message: "Task not found" });
+    
+    try {
+      // Ensure the request has valid data
+      console.log("Updating task:", taskId, "with data:", req.body);
+      
+      const updatedTask = await storage.updateTask(taskId, req.body);
+      if (!updatedTask) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      
+      // Broadcast task update
+      broadcastMessage({
+        type: 'task_update',
+        payload: { action: 'updated', task: updatedTask }
+      });
+      
+      res.json(updatedTask);
+    } catch (error) {
+      console.error("Error updating task:", error);
+      res.status(500).json({ message: "Failed to update task", error: (error as Error).message });
     }
-    
-    // Broadcast task update
-    broadcastMessage({
-      type: 'task_update',
-      payload: { action: 'updated', task: updatedTask }
-    });
-    
-    res.json(updatedTask);
   });
 
   app.delete("/api/tasks/:id", async (req, res) => {
