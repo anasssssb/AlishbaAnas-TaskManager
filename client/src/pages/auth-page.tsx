@@ -1,9 +1,9 @@
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertUserSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function AuthPage() {
-  const { user, loginMutation, registerMutation } = useAuth();
+  const { loginMutation, registerMutation } = useAuth();
   const [activeTab, setActiveTab] = useState<string>("login");
   
   // Login form

@@ -26,7 +26,7 @@ const LoadingScreen = () => (
 // Simple component to redirect to home if authenticated
 const AuthRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
-  const [, setLocation] = useLocation();
+  const [, navigate] = useLocation();
 
   console.log("AuthRoute: checking auth status", { user, isLoading });
   
@@ -36,9 +36,9 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
   
   if (user) {
     console.log("User is authenticated, redirecting from /auth to /");
-    // Use setTimeout to ensure the redirection happens after the render cycle
-    setTimeout(() => setLocation("/"), 0);
-    return <LoadingScreen />;
+    // Use direct navigation instead of setTimeout
+    navigate("/");
+    return null;
   }
   
   return <>{children}</>;
@@ -47,7 +47,7 @@ const AuthRoute = ({ children }: { children: React.ReactNode }) => {
 // Handles protection for authenticated routes
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
-  const [, setLocation] = useLocation();
+  const [, navigate] = useLocation();
   
   console.log("ProtectedRoute: checking auth status", { user, isLoading });
   
@@ -57,57 +57,51 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   
   if (!user) {
     console.log("User is not authenticated, redirecting to /auth");
-    // Use setTimeout to ensure the redirection happens after the render cycle
-    setTimeout(() => setLocation("/auth"), 0);
-    return <LoadingScreen />;
+    // Use direct navigation instead of setTimeout
+    navigate("/auth");
+    return null;
   }
   
   return <>{children}</>;
 };
 
 function Router() {
+  const { user, isLoading } = useAuth();
+  
+  console.log("Main Router: Authentication state", { user, isLoading });
+  
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+  
   return (
     <Switch>
       <Route path="/auth">
-        <AuthRoute>
-          <AuthPage />
-        </AuthRoute>
+        {user ? <Redirect to="/" /> : <AuthPage />}
       </Route>
       
       <Route path="/">
-        <ProtectedRoute>
-          <HomePage />
-        </ProtectedRoute>
+        {!user ? <Redirect to="/auth" /> : <HomePage />}
       </Route>
       
       <Route path="/tasks">
-        <ProtectedRoute>
-          <TaskBoardPage />
-        </ProtectedRoute>
+        {!user ? <Redirect to="/auth" /> : <TaskBoardPage />}
       </Route>
       
       <Route path="/calendar">
-        <ProtectedRoute>
-          <CalendarPage />
-        </ProtectedRoute>
+        {!user ? <Redirect to="/auth" /> : <CalendarPage />}
       </Route>
       
       <Route path="/team">
-        <ProtectedRoute>
-          <TeamPage />
-        </ProtectedRoute>
+        {!user ? <Redirect to="/auth" /> : <TeamPage />}
       </Route>
       
       <Route path="/reports">
-        <ProtectedRoute>
-          <ReportsPage />
-        </ProtectedRoute>
+        {!user ? <Redirect to="/auth" /> : <ReportsPage />}
       </Route>
       
       <Route path="/settings">
-        <ProtectedRoute>
-          <SettingsPage />
-        </ProtectedRoute>
+        {!user ? <Redirect to="/auth" /> : <SettingsPage />}
       </Route>
       
       <Route>
