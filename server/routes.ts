@@ -65,17 +65,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(task);
   });
 
-  app.post("/api/tasks", validateRequest({ body: insertTaskSchema }), async (req, res) => {
+  app.post("/api/tasks", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const userId = req.user!.id;
     
     try {
-      console.log("Creating task with data:", req.body);
+      console.log("Creating task with raw data:", req.body);
       
-      const task = await storage.createTask({
-        ...req.body,
-        createdById: userId,
-      });
+      // Manually extract and validate fields instead of using Zod
+      // This gives us more explicit control over the types
+      const { 
+        title, 
+        description = null, 
+        status = "todo", 
+        priority = "medium", 
+        dueDate = null, 
+        estimatedHours = null
+      } = req.body;
+      
+      // Basic validation
+      if (!title || typeof title !== 'string') {
+        return res.status(400).json({ message: "Title is required and must be a string" });
+      }
+      
+      if (status && !["todo", "inProgress", "completed"].includes(status)) {
+        return res.status(400).json({ message: "Status must be one of: todo, inProgress, completed" });
+      }
+      
+      if (priority && !["low", "medium", "high"].includes(priority)) {
+        return res.status(400).json({ message: "Priority must be one of: low, medium, high" });
+      }
+      
+      // Process date if present
+      let processedDueDate = null;
+      if (dueDate) {
+        try {
+          processedDueDate = new Date(dueDate);
+          if (isNaN(processedDueDate.getTime())) {
+            return res.status(400).json({ message: "Invalid date format for dueDate" });
+          }
+        } catch (e) {
+          return res.status(400).json({ message: "Invalid date format for dueDate" });
+        }
+      }
+      
+      // Process estimatedHours if present
+      let processedEstimatedHours = null;
+      if (estimatedHours !== null && estimatedHours !== undefined) {
+        const hours = Number(estimatedHours);
+        if (isNaN(hours)) {
+          return res.status(400).json({ message: "estimatedHours must be a number" });
+        }
+        processedEstimatedHours = hours;
+      }
+      
+      // Create properly typed task object
+      const taskData = {
+        title,
+        description,
+        status, 
+        priority,
+        dueDate: processedDueDate,
+        estimatedHours: processedEstimatedHours,
+        createdById: userId
+      };
+      
+      console.log("Creating task with processed data:", taskData);
+      
+      const task = await storage.createTask(taskData);
       
       // Broadcast to all clients about new task
       broadcastMessage({
@@ -90,22 +147,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/tasks/:id", validateRequest({ 
-    body: insertTaskSchema
-      .extend({
-        status: z.enum(["todo", "inProgress", "completed"]).optional(),
-        priority: z.enum(["low", "medium", "high"]).optional(),
-      })
-      .partial() 
-  }), async (req, res) => {
+  app.put("/api/tasks/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const taskId = parseInt(req.params.id);
     
     try {
-      // Ensure the request has valid data
-      console.log("Updating task:", taskId, "with data:", req.body);
+      console.log("Updating task:", taskId, "with raw data:", req.body);
       
-      const updatedTask = await storage.updateTask(taskId, req.body);
+      // Get the existing task first
+      const existingTask = await storage.getTask(taskId);
+      if (!existingTask) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      
+      // Extract fields with type safety
+      const update: Partial<Task> = {};
+      
+      // Title
+      if ('title' in req.body && req.body.title !== undefined) {
+        if (typeof req.body.title !== 'string') {
+          return res.status(400).json({ message: "Title must be a string" });
+        }
+        update.title = req.body.title;
+      }
+      
+      // Description
+      if ('description' in req.body) {
+        if (req.body.description !== null && req.body.description !== undefined && 
+            typeof req.body.description !== 'string') {
+          return res.status(400).json({ message: "Description must be a string or null" });
+        }
+        update.description = req.body.description;
+      }
+      
+      // Status
+      if ('status' in req.body && req.body.status !== undefined) {
+        if (!["todo", "inProgress", "completed"].includes(req.body.status)) {
+          return res.status(400).json({ message: "Status must be one of: todo, inProgress, completed" });
+        }
+        update.status = req.body.status;
+      }
+      
+      // Priority
+      if ('priority' in req.body && req.body.priority !== undefined) {
+        if (!["low", "medium", "high"].includes(req.body.priority)) {
+          return res.status(400).json({ message: "Priority must be one of: low, medium, high" });
+        }
+        update.priority = req.body.priority;
+      }
+      
+      // Due Date
+      if ('dueDate' in req.body) {
+        if (req.body.dueDate !== null && req.body.dueDate !== undefined) {
+          try {
+            const date = new Date(req.body.dueDate);
+            if (isNaN(date.getTime())) {
+              return res.status(400).json({ message: "Invalid date format for dueDate" });
+            }
+            update.dueDate = date;
+          } catch (e) {
+            return res.status(400).json({ message: "Invalid date format for dueDate" });
+          }
+        } else {
+          update.dueDate = null;
+        }
+      }
+      
+      // Estimated Hours
+      if ('estimatedHours' in req.body) {
+        if (req.body.estimatedHours !== null && req.body.estimatedHours !== undefined) {
+          const hours = Number(req.body.estimatedHours);
+          if (isNaN(hours)) {
+            return res.status(400).json({ message: "estimatedHours must be a number" });
+          }
+          update.estimatedHours = hours;
+        } else {
+          update.estimatedHours = null;
+        }
+      }
+      
+      console.log("Updating task with processed data:", update);
+      
+      const updatedTask = await storage.updateTask(taskId, update);
       if (!updatedTask) {
         return res.status(404).json({ message: "Task not found" });
       }

@@ -11,6 +11,9 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 
+// Define valid status types using type alias
+type ValidTaskStatus = "todo" | "inProgress" | "completed";
+
 interface TaskContextType {
   tasks: Task[];
   isLoading: boolean;
@@ -19,7 +22,7 @@ interface TaskContextType {
   createTask: (task: InsertTask) => Promise<Task>;
   updateTask: (id: number, task: Partial<Task>) => Promise<Task>;
   deleteTask: (id: number) => Promise<void>;
-  updateTaskStatus: (id: number, status: string) => Promise<Task>;
+  updateTaskStatus: (id: number, status: ValidTaskStatus) => Promise<Task>;
 }
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
@@ -35,6 +38,16 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     error,
   } = useQuery<Task[], Error>({
     queryKey: ["/api/tasks"],
+    // Add data transform to ensure proper date handling
+    select: (data: Task[]) => {
+      console.log("Raw tasks data:", data);
+      return data.map(task => ({
+        ...task,
+        // Convert date strings to Date objects
+        dueDate: task.dueDate ? new Date(task.dueDate) : null,
+        createdAt: task.createdAt ? new Date(task.createdAt) : new Date(),
+      }));
+    }
   });
   
   // Create task mutation
@@ -62,8 +75,28 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   // Update task mutation
   const updateTaskMutation = useMutation({
     mutationFn: async ({ id, task }: { id: number; task: Partial<Task> }) => {
-      const res = await apiRequest("PUT", `/api/tasks/${id}`, task);
-      return await res.json();
+      console.log("Updating task:", id, "with data:", task);
+      
+      // Handle date serialization explicitly
+      const processedTask = { ...task };
+      
+      // Process dueDate if present
+      if (task.dueDate instanceof Date) {
+        // Keep as is - the Date object will be serialized correctly by JSON.stringify
+        console.log("Due date being sent to API:", task.dueDate.toISOString());
+      }
+      
+      const res = await apiRequest("PUT", `/api/tasks/${id}`, processedTask);
+      
+      // Log the response for debugging
+      const responseText = await res.text();
+      console.log("Update task response:", responseText);
+      
+      try {
+        return JSON.parse(responseText);
+      } catch (e) {
+        throw new Error(`Failed to parse response: ${responseText}`);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
@@ -123,8 +156,15 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   };
   
   // Update task status
-  const updateTaskStatus = async (id: number, status: string) => {
-    return await updateTaskMutation.mutateAsync({ id, task: { status } });
+  const updateTaskStatus = async (id: number, status: ValidTaskStatus) => {
+    console.log("Updating task status:", id, status);
+    
+    // No need to validate here as the TypeScript type system ensures
+    // only valid statuses can be passed
+    return await updateTaskMutation.mutateAsync({ 
+      id, 
+      task: { status } 
+    });
   };
   
   return (

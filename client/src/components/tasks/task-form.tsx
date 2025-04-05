@@ -93,6 +93,8 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
   // Create or update task
   const taskMutation = useMutation({
     mutationFn: async (data: InsertTask) => {
+      console.log("Task mutation data:", JSON.stringify(data));
+      
       if (task) {
         // Update existing task
         const res = await apiRequest(
@@ -100,7 +102,16 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
           `/api/tasks/${task.id}`, 
           data
         );
-        return await res.json();
+        
+        // Log the response for debugging
+        const responseText = await res.text();
+        console.log("Update response:", responseText);
+        
+        try {
+          return JSON.parse(responseText);
+        } catch (e) {
+          throw new Error(`Failed to parse response: ${responseText}`);
+        }
       } else {
         // Create new task
         const res = await apiRequest(
@@ -108,7 +119,16 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
           "/api/tasks", 
           data
         );
-        return await res.json();
+        
+        // Log the response for debugging
+        const responseText = await res.text();
+        console.log("Create response:", responseText);
+        
+        try {
+          return JSON.parse(responseText);
+        } catch (e) {
+          throw new Error(`Failed to parse response: ${responseText}`);
+        }
       }
     },
     onSuccess: () => {

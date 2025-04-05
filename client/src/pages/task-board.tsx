@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { DragDropContext, Droppable, Draggable, DraggableProvided, DroppableProvided, DropResult } from "react-beautiful-dnd";
 import { PlusCircle, Loader2 } from "lucide-react";
 import { Task } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { useTaskContext } from "@/context/task-context";
 import TaskFilter from "@/components/tasks/task-filter";
 import TaskForm from "@/components/tasks/task-form";
 import Sidebar from "@/components/layout/sidebar";
@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 export default function TaskBoard() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { tasks, isLoading, updateTaskStatus } = useTaskContext();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | undefined>(undefined);
   const [filters, setFilters] = useState({
@@ -35,12 +36,6 @@ export default function TaskBoard() {
     priority: "all",
     assignee: "all",
     project: "all",
-  });
-
-  // Fetch tasks
-  const { data: tasks = [], isLoading } = useQuery<Task[]>({
-    queryKey: ["/api/tasks"],
-    enabled: !!user,
   });
 
   const handleTaskClick = (task: Task) => {
@@ -54,7 +49,7 @@ export default function TaskBoard() {
   };
 
   // Filter tasks
-  const filteredTasks = tasks.filter((task) => {
+  const filteredTasks = tasks.filter((task: Task) => {
     // Search filter
     if (
       filters.search &&
@@ -76,9 +71,9 @@ export default function TaskBoard() {
 
   // Group tasks by status
   const groupedTasks = {
-    todo: filteredTasks.filter((task) => task.status === "todo"),
-    inProgress: filteredTasks.filter((task) => task.status === "inProgress"),
-    completed: filteredTasks.filter((task) => task.status === "completed"),
+    todo: filteredTasks.filter((task: Task) => task.status === "todo"),
+    inProgress: filteredTasks.filter((task: Task) => task.status === "inProgress"),
+    completed: filteredTasks.filter((task: Task) => task.status === "completed"),
   };
 
   // Handle drag and drop
@@ -97,7 +92,7 @@ export default function TaskBoard() {
 
     // Get the task ID
     const taskId = parseInt(draggableId.split("-")[1]);
-    const task = tasks.find((t) => t.id === taskId);
+    const task = tasks.find((t: Task) => t.id === taskId);
     
     if (!task) return;
 
@@ -106,23 +101,24 @@ export default function TaskBoard() {
       // Optimistically update in the UI
       queryClient.setQueryData(["/api/tasks"], (oldData: Task[] | undefined) => {
         if (!oldData) return [];
-        return oldData.map((t) => {
+        return oldData.map((t: Task) => {
           if (t.id === taskId) {
-            return { ...t, status: destination.droppableId };
+            return { ...t, status: destination.droppableId as "todo" | "inProgress" | "completed" };
           }
           return t;
         });
       });
 
-      // Call the API to update the task status
+      // Call the task context to update status
       try {
-        console.log("Updating task status:", taskId, destination.droppableId);
+        console.log("Updating task status via context:", taskId, destination.droppableId);
         
-        // Only send the status change, not the entire task
-        // This avoids date conversion issues
-        await apiRequest("PUT", `/api/tasks/${taskId}`, {
-          status: destination.droppableId,
-        });
+        // Cast the droppableId to a valid task status
+        const newStatus = destination.droppableId as "todo" | "inProgress" | "completed";
+        
+        // Use updateTaskStatus from the context
+        await updateTaskStatus(taskId, newStatus);
+        
       } catch (error) {
         console.error("Error updating task status:", error);
         toast({
@@ -200,7 +196,7 @@ export default function TaskBoard() {
                       ref={provided.innerRef}
                       className="space-y-3 min-h-[200px]"
                     >
-                      {groupedTasks.todo.map((task, index) => (
+                      {groupedTasks.todo.map((task: Task, index: number) => (
                         <Draggable
                           key={`task-${task.id}`}
                           draggableId={`task-${task.id}`}
@@ -255,7 +251,7 @@ export default function TaskBoard() {
                       ref={provided.innerRef}
                       className="space-y-3 min-h-[200px]"
                     >
-                      {groupedTasks.inProgress.map((task, index) => (
+                      {groupedTasks.inProgress.map((task: Task, index: number) => (
                         <Draggable
                           key={`task-${task.id}`}
                           draggableId={`task-${task.id}`}
@@ -310,7 +306,7 @@ export default function TaskBoard() {
                       ref={provided.innerRef}
                       className="space-y-3 min-h-[200px]"
                     >
-                      {groupedTasks.completed.map((task, index) => (
+                      {groupedTasks.completed.map((task: Task, index: number) => (
                         <Draggable
                           key={`task-${task.id}`}
                           draggableId={`task-${task.id}`}
