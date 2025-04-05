@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertUserSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { roles } from "@shared/schema";
+import { useLocation } from "wouter";
 
 // Login form schema
 const loginSchema = z.object({
@@ -32,8 +33,26 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function AuthPage() {
-  const { loginMutation, registerMutation } = useAuth();
+  const { user, isLoading, loginMutation, registerMutation } = useAuth();
   const [activeTab, setActiveTab] = useState<string>("login");
+  const [_, setLocation] = useLocation();
+  
+  // Redirect to home if already authenticated
+  useEffect(() => {
+    if (user && !isLoading) {
+      console.log("User already authenticated, redirecting to home");
+      setLocation("/");
+    }
+  }, [user, isLoading, setLocation]);
+  
+  // Debugging effect
+  useEffect(() => {
+    console.log("AuthPage state:", {
+      isAuthenticated: !!user,
+      isAuthLoading: isLoading,
+      activeTab
+    });
+  }, [user, isLoading, activeTab]);
   
   // Login form
   const loginForm = useForm<LoginFormValues>({
