@@ -83,14 +83,13 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
     mode: "onChange",
   });
 
-  // Fetch users for assignee dropdown
+  // Fetch users
   const { data: users = [] } = useQuery({
     queryKey: ["/api/users"],
-    // This will be skipped if not authenticated
     enabled: !!user,
   });
 
-  // Create or update task
+  // Create/update task
   const taskMutation = useMutation({
     mutationFn: async (data: InsertTask) => {
       if (task) {
@@ -133,10 +132,10 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
   const onSubmit = (data: TaskFormValues) => {
     if (!user) return;
 
-    // Need to ensure we have the minimum required fields for a task
+    // Need to ensure we have the minimum required fields for a task(created)
     const formattedData: InsertTask = {
       title: data.title,
-      description: data.description || null, // Handle undefined
+      description: data.description || null, 
       status: data.status || "todo",
       priority: data.priority || "medium",
       dueDate: data.dueDate || null,
@@ -146,7 +145,7 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
 
     console.log("Submitting task:", formattedData);
     
-    // For debugging only - check date type
+    // Checking date type for debuggging
     if (formattedData.dueDate) {
       console.log("Due date object type:", Object.prototype.toString.call(formattedData.dueDate));
       console.log("Due date string representation:", formattedData.dueDate.toString());
