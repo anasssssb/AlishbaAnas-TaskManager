@@ -1,8 +1,7 @@
 import mongoose from 'mongoose';
 import { log } from './vite'; // your custom logger
 
-const MONGO_URI = 'mongodb://anas:12345@ac-orz1qmn-shard-00-00.dr8giip.mongodb.net:27017,ac-orz1qmn-shard-00-01.dr8giip.mongodb.net:27017,ac-orz1qmn-shard-00-02.dr8giip.mongodb.net:27017/testdb?ssl=true&replicaSet=atlas-peijba-shard-0&authSource=admin&retryWrites=true&w=majority';
-
+const MONGO_URI = process.env.MONGODB_URI || '';
 
 export async function connectToDatabase() {
   try {
