@@ -64,8 +64,7 @@ export default function TaskBoard() {
       return false;
     }
 
-    // In a real implementation, we would also filter by assignee and project
-    // but for now we'll just return true since we haven't implemented those yet
+    
     return true;
   });
 
@@ -82,7 +81,7 @@ export default function TaskBoard() {
 
     const { source, destination, draggableId } = result;
     
-    // Skip if dropped in the same place
+ 
     if (
       source.droppableId === destination.droppableId &&
       source.index === destination.index
@@ -127,7 +126,7 @@ export default function TaskBoard() {
           variant: "destructive",
         });
         
-        // Revert optimistic update on error
+     
         queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       }
     }
