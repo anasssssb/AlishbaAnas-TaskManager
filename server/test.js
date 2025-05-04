@@ -12,13 +12,22 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
+    console.log("🔌 Attempting to connect to MongoDB...");
     await client.connect();
+    console.log("✅ Connected successfully to MongoDB");
+
+    console.log("📡 Pinging MongoDB...");
     await client.db("admin").command({ ping: 1 });
     console.log("✅ Pinged MongoDB successfully. Connection is good!");
   } catch (err) {
-    console.error("❌ MongoDB ping failed:", err);
+    console.error("❌ Error occurred during MongoDB operation:", err.message);
   } finally {
-    await client.close();
+    try {
+      await client.close();
+      console.log("🔒 Connection to MongoDB closed.");
+    } catch (closeErr) {
+      console.error("⚠️ Failed to close MongoDB connection:", closeErr.message);
+    }
   }
 }
 
